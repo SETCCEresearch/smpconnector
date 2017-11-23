@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+* Copyright (C) 2016 The Holodeck B2B Team
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<!--
+P-Mode profile for the Holodeck B2B e-Sens Connector used to construct the actual P-Mode for the exchange of messages 
+with another AP. The settings in this profile comply with the e-Sens AS4 profile.
+
+The data to create a complete P-Mode for sending messages is retrieved from the SMP based on the Participant, Document 
+and Process ID included in the SBDH of the message to sent.
+
+The P-Mode for processing received messages is constructed by using the Initiator element from this profile document
+as Responder element (but using the Role as defined in the Responder element) and setting the values for the Receipt 
+reply pattern to RESPONSE and use the duplicate elimination feature. 
+
+The information in the Initiator element should be changed to contain the PartyId of the AP (=CN from the certificate 
+used for signing the message) and to refer to the correct key and certificate to use for signing sent and decrypting 
+received messages. The certificate must be installed in the keystore containing the private keys. The location of this 
+keystore is configured in the holodeckb2b.xml configuration file found in the «HOLODECKB2B_HOME»/conf directory.
+
+
+NOTE: The profile by default uses different settings for message encryption to prevent interop issues with AP's that use
+other AS4 implementations as these may not yet support the required AES128-GCM encryption algorithm.
+-->
+<PMode xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://holodeck-b2b.org/schemas/2014/10/pmode file:/Users/safi/Development/Holodeck-B2B-github/modules/holodeckb2b-core/src/main/resources/xsd/pmode.xsd"
+ xmlns="http://holodeck-b2b.org/schemas/2014/10/pmode">
+    <id>esens:pmode-profile</id>
+    <mep>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/oneWay</mep>
+    <mepBinding>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/push</mepBinding>
+    <Initiator>
+        <!-- Change the value of the PartyId below to the CN of the certificate that is used for signing the messages -->
+        <PartyId>urn:oasis:names:tc:ebcore:partyid-type:unregistered:holodeck-b2b</PartyId>
+        <Role>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/initiator</Role>
+        <SecurityConfiguration>
+            <Signing>
+                <!-- Use the KeystoreAlias element below to configure which private key must 
+                    be used for signing the message. This should be the AP certificate.
+                -->
+                <KeystoreAlias password="123456">holodeck_esens</KeystoreAlias>
+                <KeyReferenceMethod>BSTReference</KeyReferenceMethod>
+                <Algorithm>http://www.w3.org/2001/04/xmldsig-more#rsa-sha256</Algorithm>
+                <HashFunction>http://www.w3.org/2001/04/xmlenc#sha256</HashFunction>                
+            </Signing>
+        </SecurityConfiguration>
+    </Initiator>
+    <Responder>
+        <PartyId>profile-dummy-replaced-with-CN-from-AP-cert</PartyId>
+        <Role>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/responder</Role>
+        <SecurityConfiguration>
+            <Encryption>
+                <KeystoreAlias>profile-dummy-will-be-generated</KeystoreAlias>
+                <!-- For interoperability reasons the encryption algorithm is currently set to aes128-cbc 
+                     instead of aes128-gcm as required by the e-Sens AS4 profile. 
+                     
+                <Algorithm>http://www.w3.org/2009/xmlenc11#aes128-gcm</Algorithm> -->
+                <Algorithm>http://www.w3.org/2001/04/xmlenc#aes128-cbc</Algorithm>
+                <KeyTransport>
+                    <Algorithm>http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p</Algorithm>                
+                    <!-- Also the algorithms used for the key exchange are currently set to different values
+                        than recommended by the e-Sens profile. Again for ensuring interoperability between
+                        gateways.
+                        
+                    <Algorithm>http://www.w3.org/2009/xmlenc11#rsa-oaep</Algorithm>
+                    <MGFAlgorithm>http://www.w3.org/2009/xmlenc11#mgf1sha256</MGFAlgorithm> 
+                    <DigestAlgorithm>http://www.w3.org/2001/04/xmlenc#sha256</DigestAlgorithm> -->
+                    <DigestAlgorithm>http://www.w3.org/2000/09/xmldsig#sha1</DigestAlgorithm>                    
+                </KeyTransport>
+            </Encryption>
+        </SecurityConfiguration>
+    </Responder>
+    <Leg>
+        <Receipt>
+            <NotifyReceiptToBusinessApplication>true</NotifyReceiptToBusinessApplication>
+        </Receipt>
+        <ReceptionAwareness>
+            <MaxRetries>0</MaxRetries>
+            <RetryInterval>30</RetryInterval>
+        </ReceptionAwareness>
+        <!-- The SimpleSBDDeliver delivery method will process both received User ans Signal Messages.
+            
+            For User Messages it checks if the message contains a SBD as single payload and if 
+            it does it writes the SBD to the specified directory. 
+                
+            Currently the connector does not report back the ebMS MessageId it used for a sent 
+            message, so Signals can not be easily related to the sent SBD. Signals are therefore 
+            just saved to the specified directory. 
+            
+            This issue is being worked on and will be solved in a future release.
+            
+            NOTE: Both directory MUST already exist! If either does not, it will be impossible
+            to deliver any message!
+        -->
+        <DefaultDelivery>
+            <DeliveryMethod>org.holodeckb2b.esensconnector.delivery.SimpleSBDDeliverFactory</DeliveryMethod>
+            <Parameter>
+                <name>sbd_out</name>
+                <value>data/msg_in/sbd</value>
+            </Parameter>
+            <Parameter>
+                <name>signals_out</name>
+                <value>data/msg_in/sig</value>
+            </Parameter>
+        </DefaultDelivery>
+        <UserMessageFlow>
+            <PayloadProfile>
+                <UseAS4Compression>true</UseAS4Compression>
+            </PayloadProfile>
+        </UserMessageFlow>
+    </Leg>
+</PMode>

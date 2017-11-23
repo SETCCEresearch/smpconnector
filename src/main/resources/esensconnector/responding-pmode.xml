@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Generic P-Mode of the Holodeck B2B e-Sens Connector that defines the processing of received messages based on the 
+e-Sens AS4 profile.
+
+All messages addressed to the configured PartyId will be accepted when they are signed with a trusted certificate. The
+trust in the certificate is based on whether the certificate itself or that of its issuer is included in the keystore
+containing the public keys (location of this keystore is configured in the Holodeck B2B configuration file 
+holodeckb2b.xml found in the conf directory).
+
+The information on the responder should be changed to contain the PartyId of the AP (=CN from the certificate used for
+signing the message) and to refer to the correct key and certificate to use for decrypting the received messages and 
+signing of responses. The certificate must be installed in the keystore containing the private keys. The location of 
+this keystore is also configured in the holodeckb2b.xml configuration file.
+-->
+<PMode xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://holodeck-b2b.org/schemas/2014/10/pmode file:/Users/safi/Development/Holodeck-B2B-github/modules/holodeckb2b-core/src/main/resources/xsd/pmode.xsd"
+ xmlns="http://holodeck-b2b.org/schemas/2014/10/pmode">
+    <id>pm-esens-generic-resp</id>
+    <mep>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/oneWay</mep>
+    <mepBinding>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/push</mepBinding>
+    <Responder>
+        <!-- Change the value of the PartyId below to the CN of the certificate that is used for signing the messages -->        
+        <PartyId>urn:oasis:names:tc:ebcore:partyid-type:unregistered:holodeck-b2b</PartyId>
+        <Role>http://docs.oasis-open.org/ebxml-msg/ebms/v3.0/ns/core/200704/responder</Role>
+        <SecurityConfiguration>
+            <!-- Use BOTH KeystoreAlias elements below to configure which private key must 
+                    be used for decryption of the received messages and signing of response 
+                    messages. 
+                    This should be the AP certificate.
+            -->            
+            <Signing>
+                <KeystoreAlias password="123456">holodeck_esens</KeystoreAlias>
+                <KeyReferenceMethod>BSTReference</KeyReferenceMethod>
+                <Algorithm>http://www.w3.org/2001/04/xmldsig-more#rsa-sha256</Algorithm>
+                <HashFunction>http://www.w3.org/2001/04/xmlenc#sha256</HashFunction>                
+            </Signing>
+            <Encryption>
+                <!-- Also change this KeystoreAlias to reference the private key of the AP -->
+                <KeystoreAlias password="123456">holodeck_esens</KeystoreAlias>
+            </Encryption>
+        </SecurityConfiguration>
+    </Responder>
+    <Leg>
+        <Receipt>
+            <ReplyPattern>RESPONSE</ReplyPattern>
+        </Receipt>
+        <ReceptionAwareness>
+            <UseDuplicateElimination>true</UseDuplicateElimination>
+        </ReceptionAwareness>
+        <DefaultDelivery>
+            <!-- The SimpleSBDDeliver delivery method checks if the received messages contains a SBD 
+                as single payload and writes it to the specified directory. 
+                
+                It can also handle ebMS Signal message, but these do not apply to this P-Mode. However
+                the parameter for the directory where to write the meta-data on the signal is required
+                and must also exist. So ensure BOTH specified directories exist!
+            -->
+            <DeliveryMethod>org.holodeckb2b.esensconnector.delivery.SimpleSBDDeliverFactory</DeliveryMethod>
+            <Parameter>
+                <name>sbd_out</name>
+                <value>data/msg_in/sbd</value>
+            </Parameter>
+            <Parameter>
+                <name>signals_out</name>
+                <value>data/msg_in/sig</value>
+            </Parameter>
+        </DefaultDelivery>
+        <UserMessageFlow>
+            <PayloadProfile>
+                <UseAS4Compression>true</UseAS4Compression>
+            </PayloadProfile>
+        </UserMessageFlow>
+    </Leg>
+</PMode>
